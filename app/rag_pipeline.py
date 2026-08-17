@@ -1,37 +1,45 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 from chunking.chunker import DocumentChunker
 from embeddings.vector_store import VectorStoreManager
 from retrieval.bm25_search import BM25Retriever
 from retrieval.hybrid_retriever import HybridRetriever
 from reranking.reranker import DocumentReranker
-from generation.generator import GroundedRAGGenerator
+from generation.generator import GroundedAnswerGenerator
 
 class EnterpriseRAGPipeline:
-    """End-to-End Enterprise Grounded RAG Pipeline."""
-    
-    def __init__(self, raw_data_dir: str = "data/raw"):
-        print("⚙️ Initializing Enterprise RAG Components...")
+    """End-to-End Enterprise RAG Pipeline using Hybrid Search, Reranking, and Grounded Generation."""
+    def __init__(self, raw_docs_dir: str = "data/raw"):
         self.chunker = DocumentChunker()
-        self.chunks = self.chunker.process_directory(raw_data_dir)
+        self.chunks = self.chunker.process_directory(raw_docs_dir)
         
+        # 1. Dense Vector Store
         self.vector_store = VectorStoreManager()
         self.vector_store.index_chunks(self.chunks)
         
-        self.bm25 = BM25Retriever(self.chunks)
-        self.hybrid_retriever = HybridRetriever(self.vector_store, self.bm25)
+        # 2. Sparse BM25 Search
+        self.bm25_retriever = BM25Retriever(self.chunks)
+        
+        # 3. Hybrid Fusion
+        self.hybrid_retriever = HybridRetriever(self.vector_store, self.bm25_retriever)
+        
+        # 4. Cross-Encoder Reranker
         self.reranker = DocumentReranker()
-        self.generator = GroundedRAGGenerator()
-        print("✅ Enterprise RAG Pipeline Ready.")
+        
+        # 5. Grounded Generator (Explicitly using llama-3.3-70b-versatile)
+        self.generator = GroundedAnswerGenerator(model_name="llama-3.3-70b-versatile")
 
     def query(self, user_query: str, top_candidates: int = 5, top_evidence: int = 2) -> Dict[str, Any]:
-        """Runs full query flow: Hybrid Search -> Reranking -> Safeguard Gate -> LLM Generation."""
-        # 1. Hybrid Candidate Retrieval
+        """Executes full RAG flow with safe fallback."""
         candidates = self.hybrid_retriever.search(user_query, top_k=top_candidates)
-        
-        # 2. Cross-Encoder Reranking
         evidence = self.reranker.rerank(user_query, candidates, top_k=top_evidence)
-        
-        # 3. Grounded Generation & Citation Formatting
         result = self.generator.generate_answer(user_query, evidence)
-        return result
+        
+        return {
+            "query": user_query,
+            "answer": result["answer"],
+            "citations": result["citations"],
+            "grounded": result["grounded"],
+            "evidence": evidence,
+            "candidates": candidates
+        }
