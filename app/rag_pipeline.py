@@ -26,8 +26,8 @@ class EnterpriseRAGPipeline:
         # 4. Cross-Encoder Reranker
         self.reranker = DocumentReranker()
         
-        # 5. Grounded Generator (Explicitly using llama-3.3-70b-versatile)
-        self.generator = GroundedAnswerGenerator(model_name="llama-3.3-70b-versatile")
+        # 5. Grounded Generator
+        self.generator = GroundedAnswerGenerator()
 
     def query(self, user_query: str, top_candidates: int = 5, top_evidence: int = 2) -> Dict[str, Any]:
         """Executes full RAG flow with safe fallback."""
