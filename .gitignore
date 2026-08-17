@@ -1,0 +1,30 @@
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Vector Database and Embeddings storage
+data/chroma_db/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE / Editor configuration
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
