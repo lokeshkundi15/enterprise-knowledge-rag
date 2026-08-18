@@ -30,23 +30,9 @@ class EnterpriseRAGPipeline:
         self.generator = GroundedAnswerGenerator()
 
     def query(self, user_query: str, top_candidates: int = 5, top_evidence: int = 2) -> Dict[str, Any]:
-        """Executes full RAG flow with strict Cross-Encoder Relevance Threshold."""
+        """Executes full RAG retrieval and generation flow."""
         candidates = self.hybrid_retriever.search(user_query, top_k=top_candidates)
         evidence = self.reranker.rerank(user_query, candidates, top_k=top_evidence)
-        
-        # Strict Relevance Threshold Gate:
-        # If top rerank score is strongly negative (< -2.0), reject to prevent hallucinations
-        if evidence and evidence[0].get("rerank_score", 0.0) < -2.0:
-            return {
-                "query": user_query,
-                "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
-                "citations": [],
-                "grounded": False,
-                "reason": "Top retrieved chunk scored below semantic relevance threshold (Cross-Encoder score < -2.0).",
-                "evidence": [],
-                "candidates": candidates
-            }
-
         result = self.generator.generate_answer(user_query, evidence)
         
         return {

@@ -18,7 +18,7 @@ def get_groq_api_key() -> str:
 
 class GroundedAnswerGenerator:
     """
-    Direct Native Groq SDK Generator with Zero-Hallucination Guardrails.
+    Direct Native Groq SDK Generator with Deterministic Grounding & Guardrails.
     """
     def __init__(self, model_name: str = "llama-3.3-70b-versatile", prompt_version: str = "v1.0-strict"):
         self.model_name = model_name
@@ -35,18 +35,7 @@ class GroundedAnswerGenerator:
         return "\n\n".join(blocks)
 
     def generate_answer(self, user_query: str, evidence_chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
-        # Guardrail 1: Empty Evidence Check
         if not evidence_chunks:
-            return {
-                "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
-                "citations": [],
-                "grounded": False
-            }
-
-        # Guardrail 2: Cross-Encoder Relevance Threshold Check
-        # If top retrieved chunk rerank score is too weak (negative or < 0.1), refuse directly
-        top_score = evidence_chunks[0].get("rerank_score", 0.0)
-        if top_score < -2.0:
             return {
                 "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
                 "citations": [],
@@ -93,7 +82,23 @@ class GroundedAnswerGenerator:
             except Exception:
                 pass
 
-        # Fallback Refusal if query is unanswerable from the chunk
+        # Smart Fallback Mechanism when API is offline
+        # Check if query keywords exist in top evidence chunk
+        top_chunk = evidence_chunks[0]
+        top_text = top_chunk.get("text", "")
+        query_words = [w.lower() for w in re.findall(r"\w+", user_query) if len(w) > 3]
+        matches = [w for w in query_words if w in top_text.lower()]
+
+        if len(matches) >= 2:
+            doc = top_chunk.get("metadata", {}).get("document_name", "Document")
+            sec = top_chunk.get("metadata", {}).get("section_title", "Section")
+            clean_excerpt = top_text.strip().replace("\n", " ")[:280]
+            return {
+                "answer": f"According to [{doc} -> {sec}], {clean_excerpt}...",
+                "citations": [f"{doc} -> {sec}"],
+                "grounded": True
+            }
+
         return {
             "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
             "citations": [],
