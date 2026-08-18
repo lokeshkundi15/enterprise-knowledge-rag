@@ -1,12 +1,20 @@
 # 📚 Enterprise Grounded Knowledge Retrieval & Evaluation System
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://enterprise-knowledge-rag-y36qwyw28s9mf2vihjqcmb.streamlit.app/)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![CI/CD Quality Gate](https://img.shields.io/badge/CI%2FCD%20Quality%20Gate-PASSED-brightgreen.svg)]()
 [![Tests Passing](https://img.shields.io/badge/tests-5%2F5%20passed-brightgreen.svg)]()
 [![HitRate@2: 100%](https://img.shields.io/badge/HitRate%402-100%25-brightgreen.svg)]()
 [![MRR: 1.000](https://img.shields.io/badge/MRR-1.000-brightgreen.svg)]()
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-black)](https://github.com/lokeshkundi15/enterprise-knowledge-rag)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## 🌐 Live Application & Demo
+
+- **Live Interactive Dashboard:** [Launch Enterprise RAG Streamlit App](https://enterprise-knowledge-rag-y36qwyw28s9mf2vihjqcmb.streamlit.app/)
+- **GitHub Repository:** [lokeshkundi15/enterprise-knowledge-rag](https://github.com/lokeshkundi15/enterprise-knowledge-rag)
+
+---
 > An enterprise-grade, deterministic RAG system built with **Hybrid Search (Dense Vector + BM25)**, **Cross-Encoder Reranking**, **Prompt Versioning Registry**, **Multi-Strategy Chunking Benchmarks**, and an automated **50-Question CI/CD Quality Regression Suite**.
 
 ---
