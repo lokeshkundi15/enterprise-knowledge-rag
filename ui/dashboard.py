@@ -64,13 +64,14 @@ if st.button("🔍 Search & Generate Grounded Answer", type="primary") and query
 
     with col2:
         st.subheader("🔬 Evidence & Reranker Inspection")
-        evidence = response.get("evidence_used", [])
+        # FIX: Changed "evidence_used" to "evidence"
+        evidence = response.get("evidence", [])
         if evidence:
             evidence_data = []
             for e in evidence:
                 evidence_data.append({
-                    "Doc": e["metadata"]["document_name"],
-                    "Section": e["metadata"]["section_title"],
+                    "Doc": e["metadata"].get("document_name", "Doc"),
+                    "Section": e["metadata"].get("section_title", "Section"),
                     "Rerank Score": f"{e.get('rerank_score', 0.0):.4f}",
                     "RRF Score": f"{e.get('rrf_score', 0.0):.4f}"
                 })
@@ -78,7 +79,7 @@ if st.button("🔍 Search & Generate Grounded Answer", type="primary") and query
             
             with st.expander("📄 View Extracted Raw Chunks"):
                 for idx, e in enumerate(evidence, 1):
-                    st.markdown(f"**Chunk #{idx} [{e['metadata']['document_name']} -> {e['metadata']['section_title']}]:**")
+                    st.markdown(f"**Chunk #{idx} [{e['metadata'].get('document_name', 'Doc')} -> {e['metadata'].get('section_title', 'Section')}]:**")
                     st.code(e["text"], language="markdown")
         else:
             st.warning("No candidate evidence chunks met the relevance threshold.")
