@@ -5,7 +5,6 @@ from groq import Groq
 from prompts.registry import get_prompt_version
 
 def get_groq_api_key() -> str:
-    """Retrieve Groq API key from Streamlit secrets or OS environment."""
     key = os.getenv("GROQ_API_KEY", "")
     if not key:
         try:
@@ -17,9 +16,18 @@ def get_groq_api_key() -> str:
     return key.strip()
 
 class GroundedAnswerGenerator:
-    """
-    Direct Native Groq SDK Generator with Deterministic Grounding & Guardrails.
-    """
+    """Direct Native Groq SDK Generator with Verified Attribution & Guardrails."""
+    
+    REFUSAL_PHRASES = [
+        "insufficient evidence",
+        "cannot find",
+        "does not mention",
+        "not available in the provided",
+        "no information",
+        "not contain information",
+        "unsupported query"
+    ]
+
     def __init__(self, model_name: str = "llama-3.3-70b-versatile", prompt_version: str = "v1.0-strict"):
         self.model_name = model_name
         self.prompt_config = get_prompt_version(prompt_version)
@@ -34,11 +42,35 @@ class GroundedAnswerGenerator:
             blocks.append(f"[{idx}] Source: [{doc} -> {sec}]\nContent: {text}")
         return "\n\n".join(blocks)
 
+    def verify_citations_exist(self, citations: List[str], evidence_chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Lightweight verification: Asserts cited sources exist in the retrieved evidence set."""
+        valid_sources = {
+            f"{c.get('metadata', {}).get('document_name', '')} -> {c.get('metadata', {}).get('section_title', '')}".strip()
+            for c in evidence_chunks
+        }
+        
+        verified = []
+        unverified = []
+        
+        for cit in citations:
+            cleaned_cit = cit.strip("[] ")
+            if any(cleaned_cit in src or src in cleaned_cit for src in valid_sources):
+                verified.append(cit)
+            else:
+                unverified.append(cit)
+                
+        return {
+            "verified_citations": verified,
+            "unverified_citations": unverified,
+            "has_unverified": len(unverified) > 0
+        }
+
     def generate_answer(self, user_query: str, evidence_chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not evidence_chunks:
             return {
                 "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
                 "citations": [],
+                "unverified_citations": [],
                 "grounded": False
             }
 
@@ -50,57 +82,53 @@ class GroundedAnswerGenerator:
             query=user_query
         )
 
-        active_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"]
-
         if api_key:
             try:
                 client = Groq(api_key=api_key)
-                for model in active_models:
-                    try:
-                        response = client.chat.completions.create(
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt}
-                            ],
-                            model=model,
-                            temperature=0.0,
-                            max_tokens=600
-                        )
-                        if response and response.choices:
-                            answer_text = response.choices[0].message.content.strip()
-                            citations = re.findall(r"\[([a-zA-Z0-9_\.\-]+(?:\s*->\s*[a-zA-Z0-9_\.\-:\s]+)?)\]", answer_text)
-                            citations = list(set(citations))
-                            is_refusal = "insufficient evidence" in answer_text.lower()
+                response = client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    model=self.model_name,
+                    temperature=0.0,
+                    max_tokens=600
+                )
+                if response and response.choices:
+                    answer_text = response.choices[0].message.content.strip()
+                    
+                    # Robust multi-phrase refusal check
+                    answer_lower = answer_text.lower()
+                    is_refusal = any(phrase in answer_lower for phrase in self.REFUSAL_PHRASES)
 
-                            return {
-                                "answer": answer_text,
-                                "citations": citations if not is_refusal else [],
-                                "grounded": not is_refusal
-                            }
-                    except Exception:
-                        continue
+                    if is_refusal:
+                        return {
+                            "answer": answer_text,
+                            "citations": [],
+                            "unverified_citations": [],
+                            "grounded": False
+                        }
+
+                    # Extract citations
+                    citations = re.findall(r"\[([a-zA-Z0-9_\.\-]+(?:\s*->\s*[a-zA-Z0-9_\.\-:\s]+)?)\]", answer_text)
+                    citations = list(set(citations))
+                    
+                    # Verify citations against evidence pool
+                    cit_check = self.verify_citations_exist(citations, evidence_chunks)
+
+                    return {
+                        "answer": answer_text,
+                        "citations": cit_check["verified_citations"],
+                        "unverified_citations": cit_check["unverified_citations"],
+                        "grounded": len(cit_check["verified_citations"]) > 0 and not cit_check["has_unverified"]
+                    }
             except Exception:
                 pass
 
-        # Smart Fallback Mechanism when API is offline
-        # Check if query keywords exist in top evidence chunk
-        top_chunk = evidence_chunks[0]
-        top_text = top_chunk.get("text", "")
-        query_words = [w.lower() for w in re.findall(r"\w+", user_query) if len(w) > 3]
-        matches = [w for w in query_words if w in top_text.lower()]
-
-        if len(matches) >= 2:
-            doc = top_chunk.get("metadata", {}).get("document_name", "Document")
-            sec = top_chunk.get("metadata", {}).get("section_title", "Section")
-            clean_excerpt = top_text.strip().replace("\n", " ")[:280]
-            return {
-                "answer": f"According to [{doc} -> {sec}], {clean_excerpt}...",
-                "citations": [f"{doc} -> {sec}"],
-                "grounded": True
-            }
-
+        # Offline Refusal Fallback
         return {
             "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
             "citations": [],
+            "unverified_citations": [],
             "grounded": False
         }
