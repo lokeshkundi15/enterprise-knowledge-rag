@@ -14,6 +14,9 @@
 - **Live Interactive Dashboard:** [Launch Enterprise RAG Streamlit App](https://enterprise-knowledge-rag-y36qwyw28s9mf2vihjqcmb.streamlit.app/)
 - **GitHub Repository:** [lokeshkundi15/enterprise-knowledge-rag](https://github.com/lokeshkundi15/enterprise-knowledge-rag)
 
+## 🎬 Live Interactive Demo
+![Application Demo](assets/project_demo.gif)
+
 ---
 > An enterprise-grade, deterministic RAG system built with **Hybrid Search (Dense Vector + BM25)**, **Cross-Encoder Reranking**, **Prompt Versioning Registry**, **Multi-Strategy Chunking Benchmarks**, and an automated **50-Question CI/CD Quality Regression Suite**.
 
