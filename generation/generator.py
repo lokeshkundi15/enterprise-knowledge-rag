@@ -28,22 +28,10 @@ class GroundedAnswerGenerator:
     def generate_answer(self, user_query: str, evidence_chunks: List[Any]) -> Dict[str, Any]:
         """
         Generates grounded answer with inline citations and zero-hallucination guardrail.
-
-        IMPORTANT: This method must NEVER return an answer whose factual content
-        (numbers, durations, policy specifics) did not come from either:
-          (a) the LLM reasoning over the actual retrieved evidence_chunks, or
-          (b) the raw retrieved chunk text itself (verbatim/paraphrased).
-        If neither is available (no API key, or the API call fails), the correct
-        behavior is an honest refusal — NOT a synthesized guess, even a
-        plausible-sounding one, because a plausible-sounding wrong policy number
-        is more dangerous than saying "I don't know."
         """
-
-        # 1. Guardrail: If no evidence is provided
         if not evidence_chunks or len(evidence_chunks) == 0:
             return self._refusal()
 
-        # Format top chunk metadata
         top_chunk = evidence_chunks[0]
 
         if isinstance(top_chunk, dict):
@@ -57,13 +45,13 @@ class GroundedAnswerGenerator:
             section_name = getattr(top_chunk, "section", "General Policy")
             raw_content = getattr(top_chunk, "content", getattr(top_chunk, "text", "")).strip()
 
-        # 2. Guardrail: Cross-encoder threshold refusal
+        # Threshold check
         if top_score < -25.0:
             return self._refusal()
 
         primary_citation = f"[{doc_name} -> {section_name}]"
 
-        # 3. Online LLM Inference via Groq (primary path)
+        # Online LLM Inference via Groq
         api_key = get_groq_api_key()
         if api_key:
             try:
@@ -109,35 +97,8 @@ class GroundedAnswerGenerator:
                         "refusal": False
                     }
             except Exception:
-                pass  # Fall through to the deterministic fallback below — NOT a fabricated answer
-
-        # 4. FIXED: Deterministic fallback (no LLM available / API call failed).
-        #
-        # Previously this branch guessed at specific policy numbers (e.g. "16 weeks",
-        # "14 characters", "AES-256") keyed only on keywords in the user's question.
-        # Those numbers were NOT derived from raw_content — they were hardcoded
-        # guesses written directly in this file. That is exactly the kind of
-        # hallucination this project's "Zero-Hallucination Guardrails" claim is
-        # supposed to prevent, so it has been removed.
-        #
-        # The only safe deterministic fallback is to show the ACTUAL retrieved
-        # text (or refuse if there isn't enough of it) — never to synthesize new
-        # factual claims.
-        if raw_content and len(raw_content.strip()) >= 40:
-            excerpt = raw_content.strip().replace("\n", " ")
-            if len(excerpt) > 400:
-                excerpt = excerpt[:400].rsplit(" ", 1)[0] + "..."
-            return {
-                "answer": (
-                    f"(LLM unavailable — showing retrieved evidence directly, "
-                    f"not an AI-generated answer)\n\n{excerpt} {primary_citation}"
-                ),
-                "citations": [primary_citation],
-                "grounded": True,
-                "refusal": False
-            }
-
-        # Not enough real retrieved content to safely show — honest refusal.
+                pass
+            
         return self._refusal()
 
     @staticmethod
