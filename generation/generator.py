@@ -6,15 +6,17 @@ from groq import Groq
 
 def get_groq_api_key() -> str:
     """Safely fetch Groq API Key from environment or Streamlit secrets."""
-    key = os.getenv("GROQ_API_KEY", "")
+    key = os.getenv("GROQ_API_KEY", "").strip()
     if not key:
         try:
             import streamlit as st
             if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
                 key = str(st.secrets["GROQ_API_KEY"]).strip()
+            elif hasattr(st, "secrets") and "groq_api_key" in st.secrets:
+                key = str(st.secrets["groq_api_key"]).strip()
         except Exception:
             pass
-    return key.strip()
+    return key
 
 
 class GroundedAnswerGenerator:
