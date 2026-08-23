@@ -2,7 +2,7 @@
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://enterprise-knowledge-rag-y36qwyw28s9mf2vihjqcmb.streamlit.app/)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
-[![CI/CD Quality Gate](https://img.shields.io/badge/CI%2FCD%20Quality%20Gate-PASSED-brightgreen.svg)]()
+[![Regression Tests](<https://img.shields.io/badge/Regression%20Tests-PASSED%20(local)-brightgreen.svg>)]()
 [![Tests Passing](https://img.shields.io/badge/tests-5%2F5%20passed-brightgreen.svg)]()
 [![HitRate@2: 100%](https://img.shields.io/badge/HitRate%402-100%25-brightgreen.svg)]()
 [![MRR: 1.000](https://img.shields.io/badge/MRR-1.000-brightgreen.svg)]()
@@ -15,38 +15,44 @@
 - **GitHub Repository:** [lokeshkundi15/enterprise-knowledge-rag](https://github.com/lokeshkundi15/enterprise-knowledge-rag)
 
 ## 🎬 Live Interactive Demo
+
 ![Application Demo](assets/project_demo.gif)
 
 ---
-> An enterprise-grade, deterministic RAG system built with **Hybrid Search (Dense Vector + BM25)**, **Cross-Encoder Reranking**, **Prompt Versioning Registry**, **Multi-Strategy Chunking Benchmarks**, and an automated **50-Question CI/CD Quality Regression Suite**.
+
+> An enterprise-grade, deterministic RAG system built with **Hybrid Search (Dense Vector + BM25)**, **Cross-Encoder Reranking**, **Prompt Versioning Registry**, **Multi-Strategy Chunking Benchmarks**, and an automated **50-Question Local Regression Test Suite** (pytest-based, run on-demand — not yet wired into a CI pipeline).
 
 ---
 
 ## 1. Project Title
+
 **Advanced Enterprise RAG — Grounded Knowledge Retrieval & Quantitative Evaluation System**
 
 ---
 
 ## 2. One-line Business Problem
+
 Enterprises lose thousands of productive engineering hours searching through scattered documentation while standard GenAI chatbots generate confident hallucinations on critical technical and compliance policies.
 
 ---
 
 ## 3. Why This Matters
-* **Operational Risk:** Hallucinated answers in engineering RFCs or PCI-DSS compliance lead to security vulnerabilities and system downtime.
-* **Lexical Gap:** Pure semantic vector search fails on exact IDs (e.g., `SEC-02`, `RFC-101`, `401(k)`), returning misleading context.
-* **Lack of Attribution:** Uncited AI answers cannot be audited or trusted by human operators.
+
+- **Operational Risk:** Hallucinated answers in engineering RFCs or PCI-DSS compliance lead to security vulnerabilities and system downtime.
+- **Lexical Gap:** Pure semantic vector search fails on exact IDs (e.g., `SEC-02`, `RFC-101`, `401(k)`), returning misleading context.
+- **Lack of Attribution:** Uncited AI answers cannot be audited or trusted by human operators.
 
 ---
 
 ## 4. Solution
+
 A production-grade, stateful RAG pipeline that fuses **ChromaDB Dense Vectors** with **Rank-BM25 Sparse Lexical Search** via **Reciprocal Rank Fusion (RRF)**, filters candidates through a lightweight **Cross-Encoder Reranker**, enforces strict citation tagging, manages prompts through a versioned registry, and triggers a programmatic refusal gate on ungrounded queries.
 
 ---
 
 ## 5. System Architecture
 
-```text
+````text
                                 [ Enterprise Corpus ]
                    (Policies, Engineering Docs, Runbooks, RFCs)
                                          │
@@ -87,7 +93,7 @@ A production-grade, stateful RAG pipeline that fuses **ChromaDB Dense Vectors** 
                                          ▼
                             ┌────────────────────────┐
                             │ 6. Grounding & Citation│ (Confidence Gate: Refuses
-                            │    Safeguard Node      │  Hallucinations if score < -2.0)
+                            │    Safeguard Node      │  Hallucinations if score < -3.0, tune per corpus)
                             └────────────┬───────────┘
                                          │
                                          ▼
@@ -98,7 +104,7 @@ A production-grade, stateful RAG pipeline that fuses **ChromaDB Dense Vectors** 
                                          │
                                          ▼
                             ┌────────────────────────┐
-                            │ 8. CI/CD Quantitative  │ (Hard Assertion Quality Gate:
+                            │ 8. Local Quantitative  │ (Hard Assertion Quality Gate:
                             │    Regression Engine   │  HitRate@2 >= 95%, MRR >= 0.90)
                             └────────────────────────┘
 ---
@@ -111,7 +117,7 @@ A production-grade, stateful RAG pipeline that fuses **ChromaDB Dense Vectors** 
 - **Prompt Versioning Registry (`prompts/registry.py`):** Centralized repository for auditing prompt versions and strict grounding rules.
 - **Deterministic Grounding Safeguard:** Rejects out-of-domain and adversarial queries with a clear refusal response.
 - **Inline Source Citations:** Every factual response appends `[Document -> Section]` attribution.
-- **Automated CI/CD Regression Gate:** Continuous test gate ensuring retrieval quality never drops below production thresholds.
+- **Local Automated Regression Gate:** A pytest-based hard-assertion test (`test_retrieval_regression.py`) that fails the suite if retrieval quality drops below defined thresholds. Runs on-demand via `pytest` today — not yet wired into a GitHub Actions CI pipeline that triggers automatically on push.
 
 ## 7. Technical Decisions
 
@@ -216,7 +222,7 @@ enterprise-knowledge-rag/
 │   └── chunking_experiments.py        # Multi-Strategy Chunking Evaluator
 ├── tests/
 │   ├── test_rag_suite.py              # Pipeline Integration Tests
-│   └── test_retrieval_regression.py   # CI/CD Hard Quality Gate (HitRate >= 95%)
+│   └── test_retrieval_regression.py   # Local Hard Quality Gate (HitRate >= 95%, run via pytest)
 ├── ui/
 │   └── dashboard.py                   # Streamlit Inspection Dashboard
 ├── requirements.txt                   # Production Dependencies
@@ -224,7 +230,7 @@ enterprise-knowledge-rag/
 
 ---
 
-## 16. Automated Quality Assurance & CI/CD Gate
+## 16. Automated Quality Assurance & Regression Testing
 
 The repository enforces strict regression testing on every test run:
 
@@ -237,3 +243,4 @@ MRR drops below 0.9000
 License
 
 MIT License.
+````
