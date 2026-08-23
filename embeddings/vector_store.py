@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma_db")
 MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
 
 class VectorStoreManager:
@@ -17,8 +16,8 @@ class VectorStoreManager:
         self.collection_name = collection_name
         self.model = SentenceTransformer(MODEL_NAME)
         
-        # Initialize persistent Chroma client
-        self.client = chromadb.PersistentClient(path=PERSIST_DIR)
+        # FIX: Streamlit Cloud లో "readonly database" ఎర్రర్ రాకుండా In-Memory / Ephemeral Client వాడటం
+        self.client = chromadb.Client()
         self.collection = self.client.get_or_create_collection(
             name=self.collection_name,
             metadata={"hnsw:space": "cosine"}

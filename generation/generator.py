@@ -56,7 +56,7 @@ class GroundedAnswerGenerator:
             raw_content = getattr(top_chunk, "content", getattr(top_chunk, "text", "")).strip()
 
         # 2. Guardrail: Cross-encoder threshold refusal
-        if top_score < -2.5:
+        if top_score < -25.0:
             return self._refusal()
 
         primary_citation = f"[{doc_name} -> {section_name}]"
