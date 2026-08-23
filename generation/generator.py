@@ -23,36 +23,35 @@ class GroundedAnswerGenerator:
 
     def generate_answer(self, user_query: str, evidence_chunks: List[Any]) -> Dict[str, Any]:
         """
-        Generates grounded answer with inline citations and zero-hallucination guardrail.
+        Generates grounded answer with inline citations and strict refusal guardrails.
+        Never fabricates hardcoded numbers or policy rules.
         """
-        # 1. Guardrail: If no evidence is provided
+        refusal_msg = "I do not have sufficient evidence in the available documentation to answer this question reliably."
+
+        # 1. Guardrail: Empty evidence check
         if not evidence_chunks or len(evidence_chunks) == 0:
             return {
-                "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
+                "answer": refusal_msg,
                 "citations": [],
                 "grounded": False,
                 "refusal": True
             }
 
-        # Format top chunk metadata
+        # Extract top chunk details safely
         top_chunk = evidence_chunks[0]
-        
-        # Handle dict or object attributes
         if isinstance(top_chunk, dict):
             top_score = float(top_chunk.get("rerank_score", top_chunk.get("score", 0.0)))
             doc_name = top_chunk.get("doc", top_chunk.get("doc_name", "enterprise_policy.md"))
             section_name = top_chunk.get("section", "General Policy")
-            raw_content = top_chunk.get("content", top_chunk.get("text", "")).strip()
         else:
             top_score = getattr(top_chunk, "rerank_score", getattr(top_chunk, "score", 0.0))
             doc_name = getattr(top_chunk, "doc", getattr(top_chunk, "doc_name", "enterprise_policy.md"))
             section_name = getattr(top_chunk, "section", "General Policy")
-            raw_content = getattr(top_chunk, "content", getattr(top_chunk, "text", "")).strip()
 
-        # 2. Guardrail: Cross-encoder threshold refusal
+        # 2. Guardrail: Strict cross-encoder score threshold
         if top_score < -2.5:
             return {
-                "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
+                "answer": refusal_msg,
                 "citations": [],
                 "grounded": False,
                 "refusal": True
@@ -60,95 +59,74 @@ class GroundedAnswerGenerator:
 
         primary_citation = f"[{doc_name} -> {section_name}]"
 
-        # 3. Online LLM Inference via Groq
+        # 3. LLM Inference
         api_key = get_groq_api_key()
-        if api_key:
-            try:
-                client = Groq(api_key=api_key)
-                context_blocks = []
-                for c in evidence_chunks[:3]:
-                    c_doc = c.get("doc", "") if isinstance(c, dict) else getattr(c, "doc", "")
-                    c_sec = c.get("section", "") if isinstance(c, dict) else getattr(c, "section", "")
-                    c_txt = c.get("content", c.get("text", "")) if isinstance(c, dict) else getattr(c, "content", getattr(c, "text", ""))
-                    context_blocks.append(f"SOURCE [{c_doc} -> {c_sec}]:\n{c_txt}")
+        if not api_key:
+            return {
+                "answer": refusal_msg,
+                "citations": [],
+                "grounded": False,
+                "refusal": True
+            }
 
-                system_prompt = (
-                    "You are an enterprise compliance AI. Answer the question strictly using ONLY the provided sources.\n"
-                    "You MUST cite the source inline at the end of relevant statements using format: [filename -> Section Name].\n"
-                    "If the context does not contain the answer, reply with exact text: 'I do not have sufficient evidence in the available documentation to answer this question reliably.'"
-                )
+        context_blocks = []
+        for c in evidence_chunks[:3]:
+            c_doc = c.get("doc", "") if isinstance(c, dict) else getattr(c, "doc", "")
+            c_sec = c.get("section", "") if isinstance(c, dict) else getattr(c, "section", "")
+            c_txt = c.get("content", c.get("text", "")) if isinstance(c, dict) else getattr(c, "content", getattr(c, "text", ""))
+            context_blocks.append(f"SOURCE [{c_doc} -> {c_sec}]:\n{c_txt}")
 
-                prompt = f"CONTEXT EVIDENCE:\n{'---'.join(context_blocks)}\n\nQUESTION: {user_query}\n\nGROUNDED ANSWER:"
+        system_prompt = (
+            "You are an enterprise compliance and knowledge assistant. Answer the question strictly using ONLY the provided sources.\n"
+            "Rules:\n"
+            "1. You MUST cite the source inline at the end of relevant statements using format: [filename -> Section Name].\n"
+            "2. If the context does not contain sufficient factual evidence to answer the query, reply with exact text: "
+            "'I do not have sufficient evidence in the available documentation to answer this question reliably.'\n"
+            "3. Do NOT fabricate, extrapolate, or guess policy numbers, deadlines, or rules under any circumstances."
+        )
 
-                response = client.chat.completions.create(
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    model=self.model_name,
-                    temperature=0.0,
-                    max_tokens=400
-                )
+        prompt = f"CONTEXT EVIDENCE:\n{'---'.join(context_blocks)}\n\nQUESTION: {user_query}\n\nGROUNDED ANSWER:"
 
-                if response and response.choices:
-                    raw_answer = response.choices[0].message.content.strip()
-                    
-                    if "insufficient evidence" in raw_answer.lower() or "do not have sufficient" in raw_answer.lower():
-                        return {
-                            "answer": "I do not have sufficient evidence in the available documentation to answer this question reliably.",
-                            "citations": [],
-                            "grounded": False,
-                            "refusal": True
-                        }
+        try:
+            client = Groq(api_key=api_key)
+            response = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                model=self.model_name,
+                temperature=0.0,
+                max_tokens=400,
+                timeout=10.0
+            )
 
-                    if f"[{doc_name}" not in raw_answer:
-                        raw_answer = f"{raw_answer} {primary_citation}"
-
+            if response and response.choices:
+                raw_answer = response.choices[0].message.content.strip()
+                
+                if "insufficient evidence" in raw_answer.lower() or "do not have sufficient" in raw_answer.lower():
                     return {
-                        "answer": raw_answer,
-                        "citations": [primary_citation],
-                        "grounded": True,
-                        "refusal": False
+                        "answer": refusal_msg,
+                        "citations": [],
+                        "grounded": False,
+                        "refusal": True
                     }
-            except Exception:
-                pass  # Fall back gracefully
 
-        # 4. Telemetry & Policy Deterministic Grounded Synthesis
-        q_lower = user_query.lower()
-        
-        if "credential" in q_lower or "rotate" in q_lower or "rotation" in q_lower:
-            synthesized_answer = (
-                f"To rotate production credentials safely: 1) Generate new API keys in the vault, "
-                f"2) Deploy keys to secondary microservice environment variables, 3) Verify authentication health, "
-                f"and 4) Deprecate and revoke the previous keys after a 24-hour overlap period {primary_citation}."
-            )
-        elif "parental leave" in q_lower or "leave" in q_lower:
-            synthesized_answer = (
-                f"Eligible full-time employees receive 16 weeks of fully paid parental leave following the birth, "
-                f"adoption, or foster placement of a child. Leave must be completed within 12 months {primary_citation}."
-            )
-        elif "encryption" in q_lower or "retention" in q_lower or "telemetry" in q_lower:
-            synthesized_answer = (
-                f"Customer telemetry and sensitive payloads must be encrypted using AES-256 at rest and TLS 1.3 in transit, "
-                f"with operational telemetry logs retained for a mandatory period of 90 days {primary_citation}."
-            )
-        elif "password" in q_lower or "complexity" in q_lower:
-            synthesized_answer = (
-                f"All employee access passwords must contain a minimum of 14 characters with mixed case, numbers, "
-                f"and special symbols, with mandatory rotation every 90 days {primary_citation}."
-            )
-        elif "kafka" in q_lower:
-            synthesized_answer = (
-                f"Standard Kafka message retention across production clusters is configured to 7 days (168 hours) "
-                f"with automatic log compaction enabled {primary_citation}."
-            )
-        else:
-            first_sentence = raw_content.split("\n")[0] if raw_content else "According to enterprise policy specifications"
-            synthesized_answer = f"According to documentation: {first_sentence} {primary_citation}."
+                if f"[{doc_name}" not in raw_answer:
+                    raw_answer = f"{raw_answer} {primary_citation}"
 
+                return {
+                    "answer": raw_answer,
+                    "citations": [primary_citation],
+                    "grounded": True,
+                    "refusal": False
+                }
+        except Exception:
+            pass
+
+        # 4. Fallback on LLM Failure: Honest refusal instead of fabricated answers
         return {
-            "answer": synthesized_answer,
-            "citations": [primary_citation],
-            "grounded": True,
-            "refusal": False
+            "answer": refusal_msg,
+            "citations": [],
+            "grounded": False,
+            "refusal": True
         }
